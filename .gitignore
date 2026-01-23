@@ -1,0 +1,26 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Vector stores (generated at runtime)
+vectorstore_ifc/
+qdrant_local/
+
+# Artifacts (generated at runtime)
+artifacts/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
