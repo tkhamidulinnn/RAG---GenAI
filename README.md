@@ -6,6 +6,7 @@ A text-only RAG system that extracts text from a PDF, chunks it, stores embeddin
 - Practice 1: Foundational Text-Based RAG (Naive RAG)
 - Practice 2: RAG Evaluation Pipeline (RAGAS metrics)
 - Practice 3: Advanced Retrieval Techniques
+- Practice 4: System Optimization (Semantic Caching, Multi-hop Retrieval)
 
 ## Setup (Step by Step)
 
@@ -186,6 +187,71 @@ rag/
 - [Qdrant: Hybrid Search Tutorial](https://qdrant.tech/documentation/tutorials/hybrid-search/)
 - [Anthropic: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval)
 - [HuggingFace: Sentence Transformers](https://www.sbert.net/docs/pretrained_cross-encoders.html)
+
+---
+
+## Practice 4: System Optimization
+
+Practice 4 adds performance optimizations to reduce latency and handle complex questions:
+
+### Features
+
+| Feature | Description | UI Control |
+|---------|-------------|------------|
+| **Semantic Caching** | Cache answers for similar questions | Checkbox + threshold slider |
+| **Multi-hop Retrieval** | Decompose complex questions into sub-queries | Checkbox |
+
+### Semantic Caching
+
+Caches query-answer pairs using embeddings-based similarity lookup:
+- Computes embedding for each query
+- Compares against cached query embeddings using cosine similarity
+- Returns cached answer if similarity exceeds threshold (default: 0.92)
+- Persists cache to disk (`semantic_cache.json`)
+
+**Benefits:**
+- Faster response for repeated/similar questions
+- Reduced API costs (no LLM call on cache hit)
+- Observable hit/miss statistics
+
+**Configuration:**
+- `Similarity threshold`: Higher = stricter matching, fewer cache hits
+- `Max entries`: Maximum cached query-answer pairs (default: 500)
+
+### Multi-hop Retrieval
+
+Decomposes complex questions requiring information from multiple document sections:
+
+1. **Complexity Detection**: Analyzes query for multi-part indicators
+2. **Query Decomposition**: Breaks into focused sub-queries
+3. **Sequential Retrieval**: Retrieves documents for each sub-query
+4. **Context Aggregation**: Combines results using round-robin selection
+
+**Triggers decomposition when:**
+- Query contains conjunctions ("and", "also", "both")
+- Query asks for comparisons ("difference between", "compare")
+- Query has multiple question marks
+- Query exceeds minimum word count (10 words)
+
+### Architecture
+
+```
+rag/
+├── semantic_cache.py      # Embeddings-based caching
+└── multihop_retrieval.py  # Query decomposition
+```
+
+### Usage
+
+Enable in the Streamlit sidebar under "Optimization (Practice 4)":
+1. Check "Enable Semantic Cache" for caching
+2. Adjust similarity threshold (0.80-0.99)
+3. Check "Enable Multi-hop Retrieval" for complex questions
+
+### References
+
+- [Anthropic: Caching in RAG](https://www.anthropic.com/news/prompt-caching)
+- [LangChain: Query Decomposition](https://python.langchain.com/docs/tutorials/query_analysis/)
 
 ---
 
