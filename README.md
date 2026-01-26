@@ -1,12 +1,13 @@
 # RAG Practice: Foundational to Advanced RAG System
 
-A text-only RAG system that extracts text from a PDF, chunks it, stores embeddings in FAISS and Qdrant vector stores, retrieves relevant chunks via similarity search, and generates answers using Gemini.
+A comprehensive RAG system that extracts content from PDFs (text, tables, images), stores embeddings in FAISS and Qdrant vector stores, retrieves relevant content via similarity search, and generates answers using Gemini.
 
 **Practices Implemented:**
 - Practice 1: Foundational Text-Based RAG (Naive RAG)
 - Practice 2: RAG Evaluation Pipeline (RAGAS metrics)
 - Practice 3: Advanced Retrieval Techniques
 - Practice 4: System Optimization (Semantic Caching, Multi-hop Retrieval)
+- Practice 5: Multimodal RAG (Tables + Charts/Graphs)
 
 ## Setup (Step by Step)
 
@@ -100,19 +101,33 @@ python ingest.py --extract-metadata --build-bm25
 
 # Full ingestion with all features
 python ingest.py --extract-metadata --build-bm25 --skip-qdrant
+
+# Multimodal ingestion (Practice 5)
+python ingest.py --multimodal --skip-qdrant
+
+# Full multimodal with all features
+python ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
 ```
 
 This creates:
-- `vectorstore_ifc/` — FAISS index
+- `vectorstore_ifc/` — FAISS index (text chunks)
 - `qdrant_local/` — Qdrant local storage
 - `bm25_index.json` — BM25 sparse index (if `--build-bm25`)
+- `table_index/` — FAISS index for tables (if `--multimodal`)
+- `image_index/` — FAISS index for images (if `--multimodal`)
+- `artifacts/tables_extracted/` — Extracted table data
+- `artifacts/images_extracted/` — Extracted images with VLM descriptions
 
 **Chunking**: 1000 characters per chunk, 150 character overlap.
 
 ## Run the UI
 
 ```bash
+# Text-based RAG (Practices 1-4)
 python -m streamlit run app.py
+
+# Multimodal RAG (Practice 5)
+python -m streamlit run app_multimodal.py
 ```
 
 Open http://localhost:8501, select FAISS or Qdrant, enter a question.
@@ -295,3 +310,140 @@ python run_evaluation.py --modes dense sparse hybrid --test-reranking --quick
 ```
 
 This runs experiments across all combinations and generates a comparison report.
+
+---
+
+## Practice 5: Multimodal RAG
+
+Practice 5 adds multimodal retrieval for tables and charts/graphs:
+
+### Features
+
+| Feature | Description | Flag/Control |
+|---------|-------------|--------------|
+| **Table Extraction** | Extract tables with structure preservation | `--multimodal` or `--tables-only` |
+| **Image Extraction** | Extract charts/graphs with VLM descriptions | `--multimodal` or `--images-only` |
+| **Multimodal Retrieval** | Search across text, tables, and images | UI mode selector |
+| **Smart Routing** | Auto-detect query intent and route to relevant modalities | "Auto" mode |
+
+### Table Processing (5.1)
+
+Each table is extracted with dual representations:
+- **R1 (Retrieval)**: Markdown-formatted text for semantic search
+- **R2 (Structured)**: JSON with headers, rows, and normalized numeric values
+
+**Extraction pipeline:**
+1. Detect tables using PyMuPDF (fallback: pdfplumber)
+2. Extract table structure (rows, columns, headers)
+3. Detect captions from surrounding text
+4. Normalize numeric values (currency, percentages)
+5. Create both representations and index
+
+**Table QA prompts** force:
+- Step-by-step reasoning
+- Exact cell value extraction
+- Calculation with shown inputs
+- Evidence citations (page, table_id, row/column)
+
+### Image/Chart Processing (5.2)
+
+Charts and graphs are processed using VLM (Vision Language Model):
+1. Extract embedded images from PDF
+2. Filter by size (skip icons/logos)
+3. Send to Gemini VLM for description
+4. Extract: chart type, axes, values, trends
+5. Index textual description for retrieval
+
+**VLM extracts:**
+- Chart type (bar, line, pie, area, scatter)
+- Axis labels and units
+- Key data points and values
+- Trends and insights
+- Confidence level
+
+### Setup for Practice 5
+
+```bash
+# Install dependencies (pdfplumber optional but recommended)
+pip install pdfplumber
+
+# Run multimodal ingestion
+python ingest.py --multimodal --skip-qdrant
+
+# Or extract tables only
+python ingest.py --tables-only --skip-qdrant
+
+# Or extract images only
+python ingest.py --images-only --skip-qdrant
+
+# Full ingestion with all features
+python ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
+```
+
+### Running Multimodal UI
+
+```bash
+python -m streamlit run app_multimodal.py
+```
+
+**UI Controls:**
+- **Mode selector**: Auto, Text only, Tables only, Images only, Mixed
+- **Top-K sliders**: Separate K for text, tables, images
+- **Display toggles**: Show/hide text chunks, tables, images
+- **Raw data view**: Inspect structured table JSON
+
+### Retrieval Modes
+
+| Mode | Description |
+|------|-------------|
+| **Auto** | Detects query intent using keywords and routes accordingly |
+| **Text only** | Baseline text chunk retrieval |
+| **Tables only** | Search only table representations |
+| **Images only** | Search only image descriptions |
+| **Mixed** | Search all modalities and merge results |
+
+**Intent detection keywords:**
+- Tables: "table", "row", "column", "value", "percent", "FY", "$", "revenue", etc.
+- Images: "chart", "graph", "figure", "trend", "visualization", etc.
+
+### Demo Queries
+
+**Table queries:**
+- "What was the total revenue in FY24?"
+- "Compare IFC's assets between 2023 and 2024"
+- "What percentage of disbursements went to climate finance?"
+
+**Chart queries:**
+- "What trends are shown in the investment growth chart?"
+- "Describe the regional distribution of projects"
+- "What does the portfolio composition figure show?"
+
+**Combined queries:**
+- "Explain the financial performance and how it's visualized"
+- "What are the key metrics and their trends over time?"
+
+### Architecture
+
+```
+rag/
+├── table_extraction.py      # Table extraction with dual representation
+├── image_extraction.py      # Image extraction with VLM descriptions
+├── multimodal_indexing.py   # Unified indexing and retrieval
+├── multimodal_prompts.py    # Table QA, Visual QA, Combined prompts
+app_multimodal.py            # Streamlit UI for multimodal RAG
+```
+
+### Risks and Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Table extraction errors | Dual extraction (PyMuPDF + pdfplumber fallback) |
+| Poor image descriptions | Confidence scoring, caption detection |
+| Hallucination | Strict grounding prompts, evidence citations required |
+| Missing evidence | Explicit refusal when data not found |
+| Slow VLM processing | Cached descriptions, batch processing |
+
+### References
+
+- [Google Cloud: Multimodal RAG](https://cloud.google.com/blog/products/ai-machine-learning/multimodal-rag-with-gemini)
+- [LangChain: Multi-Vector Retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector)

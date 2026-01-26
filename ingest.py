@@ -17,6 +17,16 @@ from rag.indexing import (
 )
 from rag.pdf_extract import extract_all
 
+# Practice 5: Multimodal imports
+from rag.table_extraction import extract_tables, save_tables
+from rag.image_extraction import extract_images_from_pdf, save_images
+from rag.multimodal_indexing import (
+    tables_to_documents,
+    images_to_documents,
+    build_table_index,
+    build_image_index,
+)
+
 
 def read_text_pages(path: Path) -> List[dict]:
     rows: List[dict] = []
@@ -42,8 +52,14 @@ Examples:
     # With advanced retrieval features (Practice 3)
     python ingest.py --extract-metadata --build-bm25
 
-    # Full ingestion with all features
-    python ingest.py --extract-metadata --build-bm25 --include-images
+    # Full ingestion with all features (Practice 3)
+    python ingest.py --extract-metadata --build-bm25
+
+    # Multimodal ingestion (Practice 5)
+    python ingest.py --multimodal --skip-qdrant
+
+    # Full multimodal with all features
+    python ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
         """,
     )
     parser.add_argument("--pdf", type=Path, default=settings.pdf_path, help="Path to input PDF")
@@ -64,12 +80,39 @@ Examples:
         action="store_true",
         help="[Practice 3] Build BM25 index for sparse/hybrid retrieval",
     )
+
+    # Practice 5: Multimodal options
+    parser.add_argument(
+        "--multimodal",
+        action="store_true",
+        help="[Practice 5] Enable multimodal extraction and indexing (tables + images)",
+    )
+    parser.add_argument(
+        "--tables-only",
+        action="store_true",
+        help="[Practice 5] Extract and index tables only (no images)",
+    )
+    parser.add_argument(
+        "--images-only",
+        action="store_true",
+        help="[Practice 5] Extract and index images only (no tables)",
+    )
     args = parser.parse_args()
 
     pdf_path = args.pdf.expanduser().resolve()
     artifacts_dir = args.artifacts.expanduser().resolve()
     faiss_dir = args.faiss_out.expanduser().resolve()
     bm25_path = faiss_dir.parent / "bm25_index.json"
+
+    # Practice 5: Multimodal paths
+    tables_dir = artifacts_dir / "tables_extracted"
+    images_dir = artifacts_dir / "images_extracted"
+    table_index_dir = faiss_dir.parent / "table_index"
+    image_index_dir = faiss_dir.parent / "image_index"
+
+    # Determine multimodal settings
+    extract_tables_flag = args.multimodal or args.tables_only
+    extract_images_flag = args.multimodal or args.images_only
 
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
@@ -120,6 +163,57 @@ Examples:
         build_bm25_index(chunks, bm25_path)
         print(f"  BM25 index saved to {bm25_path}")
 
+    # Step 6: Practice 5 - Multimodal extraction and indexing
+    tables_count = 0
+    images_count = 0
+
+    if extract_tables_flag:
+        print("\nStep 6a: Extracting tables (Practice 5)...")
+        try:
+            extracted_tables = extract_tables(pdf_path, doc_id="ifc_2024")
+            tables_count = len(extracted_tables)
+            print(f"  Found {tables_count} tables")
+
+            if extracted_tables:
+                save_tables(extracted_tables, tables_dir)
+                print(f"  Tables saved to {tables_dir}")
+
+                # Build table index
+                print("  Building table index...")
+                table_docs = tables_to_documents(extracted_tables)
+                if table_docs:
+                    build_table_index(extracted_tables, embeddings, table_index_dir)
+                    print(f"  Table index saved to {table_index_dir}")
+        except Exception as e:
+            print(f"  Warning: Table extraction failed: {e}")
+
+    if extract_images_flag:
+        print("\nStep 6b: Extracting images/charts (Practice 5)...")
+        try:
+            extracted_images = extract_images_from_pdf(
+                pdf_path=pdf_path,
+                output_dir=images_dir,
+                doc_id="ifc_2024",
+                client=client,
+                model=settings.gemini_model,
+                use_vlm=True,
+            )
+            images_count = len(extracted_images)
+            print(f"  Found {images_count} images/charts")
+
+            if extracted_images:
+                save_images(extracted_images, images_dir)
+                print(f"  Images saved to {images_dir}")
+
+                # Build image index
+                print("  Building image index...")
+                image_docs = images_to_documents(extracted_images)
+                if image_docs:
+                    build_image_index(extracted_images, embeddings, image_index_dir)
+                    print(f"  Image index saved to {image_index_dir}")
+        except Exception as e:
+            print(f"  Warning: Image extraction failed: {e}")
+
     # Summary
     print("\n" + "=" * 60)
     print("INGESTION COMPLETE")
@@ -130,6 +224,12 @@ Examples:
     print(f"  Qdrant collection:  {'skipped' if args.skip_qdrant else settings.qdrant_collection}")
     print(f"  BM25 index:         {'skipped' if not args.build_bm25 else bm25_path}")
     print(f"  Metadata extracted: {'yes' if args.extract_metadata else 'no'}")
+    if extract_tables_flag or extract_images_flag:
+        print(f"  --- Practice 5 (Multimodal) ---")
+        print(f"  Tables extracted:   {tables_count}")
+        print(f"  Images extracted:   {images_count}")
+        print(f"  Table index:        {table_index_dir if tables_count > 0 else 'none'}")
+        print(f"  Image index:        {image_index_dir if images_count > 0 else 'none'}")
     print("=" * 60)
 
 
