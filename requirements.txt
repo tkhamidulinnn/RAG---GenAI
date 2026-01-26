@@ -1,3 +1,4 @@
+# Core dependencies
 streamlit>=1.31.0
 google-genai>=0.6.0
 langchain-community>=0.2.0
@@ -8,3 +9,6 @@ qdrant-client>=1.8.0
 faiss-cpu>=1.7.4
 pymupdf>=1.23.0
 langfuse>=2.0.0
+
+# Practice 3: Advanced retrieval
+sentence-transformers>=2.2.0  # Cross-encoder re-ranking

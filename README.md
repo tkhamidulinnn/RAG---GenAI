@@ -1,6 +1,11 @@
-# RAG Practice 1: Foundational Text-Based RAG
+# RAG Practice: Foundational to Advanced RAG System
 
 A text-only RAG system that extracts text from a PDF, chunks it, stores embeddings in FAISS and Qdrant vector stores, retrieves relevant chunks via similarity search, and generates answers using Gemini.
+
+**Practices Implemented:**
+- Practice 1: Foundational Text-Based RAG (Naive RAG)
+- Practice 2: RAG Evaluation Pipeline (RAGAS metrics)
+- Practice 3: Advanced Retrieval Techniques
 
 ## Setup (Step by Step)
 
@@ -83,16 +88,23 @@ Should print: `OK: your-project-id`
 Extract text from PDF and build vector stores:
 
 ```bash
-# FAISS only (recommended for quick start)
+# Basic ingestion (FAISS only, quick start)
 python ingest.py --skip-qdrant
 
-# FAISS + Qdrant (both local, no Docker needed)
+# Basic ingestion (FAISS + Qdrant)
 python ingest.py
+
+# With Practice 3 features (metadata + BM25)
+python ingest.py --extract-metadata --build-bm25
+
+# Full ingestion with all features
+python ingest.py --extract-metadata --build-bm25 --skip-qdrant
 ```
 
 This creates:
 - `vectorstore_ifc/` — FAISS index
 - `qdrant_local/` — Qdrant local storage
+- `bm25_index.json` — BM25 sparse index (if `--build-bm25`)
 
 **Chunking**: 1000 characters per chunk, 150 character overlap.
 
@@ -115,3 +127,105 @@ Open http://localhost:8501, select FAISS or Qdrant, enter a question.
 | Concurrency | Multiple processes OK | Single process only (local mode) |
 | Scalability | Single-node, in-memory | Distributed (server mode) |
 | Best for | Prototyping, small datasets | Production, larger datasets |
+
+---
+
+## Practice 3: Advanced Retrieval
+
+Practice 3 improves retrieval quality with optional, modular techniques:
+
+### Features
+
+| Feature | Description | Flag |
+|---------|-------------|------|
+| **Re-ranking** | Cross-encoder two-stage retrieval | UI checkbox / `--rerank` |
+| **Metadata Filtering** | Filter by page range or section | UI sidebar |
+| **BM25 Sparse Retrieval** | Lexical keyword matching | `--build-bm25` at ingest |
+| **Hybrid Retrieval** | Dense + Sparse with RRF fusion | UI dropdown |
+
+### Retrieval Modes
+
+- **Dense (baseline)**: Embedding-based semantic search
+- **Sparse**: BM25 lexical/keyword search
+- **Hybrid**: Combined dense + sparse using Reciprocal Rank Fusion (RRF)
+
+### Re-ranking
+
+Two-stage retrieval:
+1. Retrieve Top-N candidates (default: 20) using dense/hybrid
+2. Re-score using cross-encoder model
+3. Return Top-K final results
+
+Uses `cross-encoder/ms-marco-MiniLM-L-6-v2` by default.
+
+### Setup for Practice 3
+
+```bash
+# Re-ingest with metadata and BM25
+python ingest.py --extract-metadata --build-bm25 --skip-qdrant
+
+# Install cross-encoder (if not already installed)
+pip install sentence-transformers
+```
+
+### Architecture
+
+```
+rag/
+├── retrieval_config.py    # Configuration dataclasses
+├── reranker.py            # Cross-encoder re-ranking
+├── sparse_retrieval.py    # BM25 implementation
+├── hybrid_retrieval.py    # RRF fusion
+├── advanced_retriever.py  # Unified interface
+└── metadata_extractor.py  # Section/content type detection
+```
+
+### References
+
+- [Pinecone: Advanced RAG Techniques](https://www.pinecone.io/learn/advanced-rag-techniques/)
+- [Qdrant: Hybrid Search Tutorial](https://qdrant.tech/documentation/tutorials/hybrid-search/)
+- [Anthropic: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval)
+- [HuggingFace: Sentence Transformers](https://www.sbert.net/docs/pretrained_cross-encoders.html)
+
+---
+
+## Evaluation (Practice 2)
+
+Run the evaluation pipeline:
+
+```bash
+# Quick test (k=5 only)
+python run_evaluation.py --quick
+
+# Standard evaluation (k=3,5,8)
+python run_evaluation.py
+
+# Full evaluation with LLM judge
+python run_evaluation.py --full
+
+# With Practice 3 features
+python run_evaluation.py --modes dense hybrid --test-reranking
+```
+
+Results are saved to `eval/results/`:
+- `eval_samples_*.json` — Raw evaluation samples
+- `experiments_*.json` — Aggregated metrics
+- `evaluation_report.md` — Markdown report
+
+### Metrics (RAGAS-style)
+
+| Metric | Description |
+|--------|-------------|
+| Faithfulness | Answer grounded in retrieved context (no hallucination) |
+| Answer Relevance | Answer directly addresses the question |
+| Context Precision | Retrieved contexts are relevant (low noise) |
+| Context Recall | Retrieved contexts cover ground truth information |
+
+### Comparing Retrieval Modes
+
+```bash
+# Compare dense baseline vs hybrid vs reranked
+python run_evaluation.py --modes dense sparse hybrid --test-reranking --quick
+```
+
+This runs experiments across all combinations and generates a comparison report.

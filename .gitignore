@@ -10,6 +10,9 @@ qdrant_local/
 # Artifacts (generated at runtime)
 artifacts/
 
+# Evaluation results (generated)
+eval/results/
+
 # Python cache
 __pycache__/
 *.py[cod]
