@@ -46,6 +46,13 @@ def extract_images(
     gemini_model: str,
     client,
 ) -> List[Dict[str, Any]]:
+    """
+    Extract images from PDF with basic captioning (legacy function).
+    
+    NOTE: This is a legacy function used only by extract_all() for basic text extraction.
+    For multimodal RAG (Practice 5), use rag.image_extraction.extract_images_from_pdf() instead,
+    which provides VLM-based descriptions and chart type detection.
+    """
     doc = fitz.open(pdf_path)
     image_rows: List[Dict[str, Any]] = []
     images_dir = artifacts_dir / "images"
@@ -105,6 +112,15 @@ def extract_images(
 
 
 def extract_tables(pdf_path: Path, artifacts_dir: Path) -> List[Dict[str, Any]]:
+    """
+    Extract tables from PDF using camelot (legacy function).
+    
+    NOTE: This is a legacy function used only by extract_all() for basic text extraction.
+    For multimodal RAG (Practice 5), use rag.table_extraction.extract_tables() instead,
+    which provides dual representations and better structure preservation.
+    
+    Requires optional dependency: camelot-py[cv] (not in requirements.txt)
+    """
     try:
         import camelot
     except Exception:

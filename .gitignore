@@ -27,3 +27,19 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Python package build artifacts
+*.egg-info/
+build/
+dist/
+*.egg
+
+# Generated indexes (keep structure, ignore content)
+bm25_index.json
+semantic_cache.json
+table_index/
+image_index/
+
+# Environment files
+.env
+# .env.example should be tracked (template for reviewers)

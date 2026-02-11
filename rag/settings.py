@@ -4,6 +4,12 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env from repo root
+_repo_root = Path(__file__).resolve().parents[1]
+load_dotenv(_repo_root / ".env")
+
 
 @dataclass(frozen=True)
 class Settings:

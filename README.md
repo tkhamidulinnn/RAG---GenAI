@@ -8,6 +8,33 @@ A comprehensive RAG system that extracts content from PDFs (text, tables, images
 - Practice 3: Advanced Retrieval Techniques
 - Practice 4: System Optimization (Semantic Caching, Multi-hop Retrieval)
 - Practice 5: Multimodal RAG (Tables + Charts/Graphs)
+- Practice 6: ColPali-style Visual RAG
+
+## Quick Start
+
+1. **Install dependencies:**
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # macOS/Linux
+   pip install -r requirements.txt
+   ```
+
+2. **Set environment variables:**
+   ```bash
+   export GCP_PROJECT=your-project-id
+   export GCP_LOCATION=us-central1
+   ```
+   Or copy `.env.example` to `.env` and fill in values.
+
+3. **Run ingestion:**
+   ```bash
+   python scripts/ingest.py --skip-qdrant
+   ```
+
+4. **Launch UI:**
+   ```bash
+   streamlit run apps/app.py
+   ```
 
 ## Setup (Step by Step)
 
@@ -91,22 +118,22 @@ Extract text from PDF and build vector stores:
 
 ```bash
 # Basic ingestion (FAISS only, quick start)
-python ingest.py --skip-qdrant
+python scripts/ingest.py --skip-qdrant
 
 # Basic ingestion (FAISS + Qdrant)
-python ingest.py
+python scripts/ingest.py
 
 # With Practice 3 features (metadata + BM25)
-python ingest.py --extract-metadata --build-bm25
+python scripts/ingest.py --extract-metadata --build-bm25
 
 # Full ingestion with all features
-python ingest.py --extract-metadata --build-bm25 --skip-qdrant
+python scripts/ingest.py --extract-metadata --build-bm25 --skip-qdrant
 
 # Multimodal ingestion (Practice 5)
-python ingest.py --multimodal --skip-qdrant
+python scripts/ingest.py --multimodal --skip-qdrant
 
 # Full multimodal with all features
-python ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
+python scripts/ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
 ```
 
 This creates:
@@ -124,10 +151,10 @@ This creates:
 
 ```bash
 # Text-based RAG (Practices 1-4)
-python -m streamlit run app.py
+python -m streamlit run apps/app.py
 
 # Multimodal RAG (Practice 5)
-python -m streamlit run app_multimodal.py
+python -m streamlit run apps/app_multimodal.py
 ```
 
 Open http://localhost:8501, select FAISS or Qdrant, enter a question.
@@ -178,7 +205,7 @@ Uses `cross-encoder/ms-marco-MiniLM-L-6-v2` by default.
 
 ```bash
 # Re-ingest with metadata and BM25
-python ingest.py --extract-metadata --build-bm25 --skip-qdrant
+python scripts/ingest.py --extract-metadata --build-bm25 --skip-qdrant
 
 # Install cross-encoder (if not already installed)
 pip install sentence-transformers
@@ -276,16 +303,16 @@ Run the evaluation pipeline:
 
 ```bash
 # Quick test (k=5 only)
-python run_evaluation.py --quick
+python scripts/run_evaluation.py --quick
 
 # Standard evaluation (k=3,5,8)
-python run_evaluation.py
+python scripts/run_evaluation.py
 
 # Full evaluation with LLM judge
-python run_evaluation.py --full
+python scripts/run_evaluation.py --full
 
 # With Practice 3 features
-python run_evaluation.py --modes dense hybrid --test-reranking
+python scripts/run_evaluation.py --modes dense hybrid --test-reranking
 ```
 
 Results are saved to `eval/results/`:
@@ -306,7 +333,7 @@ Results are saved to `eval/results/`:
 
 ```bash
 # Compare dense baseline vs hybrid vs reranked
-python run_evaluation.py --modes dense sparse hybrid --test-reranking --quick
+python scripts/run_evaluation.py --modes dense sparse hybrid --test-reranking --quick
 ```
 
 This runs experiments across all combinations and generates a comparison report.
@@ -368,22 +395,22 @@ Charts and graphs are processed using VLM (Vision Language Model):
 pip install pdfplumber
 
 # Run multimodal ingestion
-python ingest.py --multimodal --skip-qdrant
+python scripts/ingest.py --multimodal --skip-qdrant
 
 # Or extract tables only
-python ingest.py --tables-only --skip-qdrant
+python scripts/ingest.py --tables-only --skip-qdrant
 
 # Or extract images only
-python ingest.py --images-only --skip-qdrant
+python scripts/ingest.py --images-only --skip-qdrant
 
 # Full ingestion with all features
-python ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
+python scripts/ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
 ```
 
 ### Running Multimodal UI
 
 ```bash
-python -m streamlit run app_multimodal.py
+python -m streamlit run apps/app_multimodal.py
 ```
 
 **UI Controls:**
@@ -430,7 +457,7 @@ rag/
 ├── image_extraction.py      # Image extraction with VLM descriptions
 ├── multimodal_indexing.py   # Unified indexing and retrieval
 ├── multimodal_prompts.py    # Table QA, Visual QA, Combined prompts
-app_multimodal.py            # Streamlit UI for multimodal RAG
+apps/app_multimodal.py       # Streamlit UI for multimodal RAG
 ```
 
 ### Risks and Mitigations
@@ -447,3 +474,150 @@ app_multimodal.py            # Streamlit UI for multimodal RAG
 
 - [Google Cloud: Multimodal RAG](https://cloud.google.com/blog/products/ai-machine-learning/multimodal-rag-with-gemini)
 - [LangChain: Multi-Vector Retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector)
+
+---
+
+## Practice 6: ColPali-style Visual RAG
+
+Practice 6 implements a visual retrieval pipeline inspired by [ColPali](https://arxiv.org/abs/2407.01449), operating directly on document images rather than extracted text. This is an intern-level reference implementation for learning and demonstration.
+
+**Note:** This implementation demonstrates the ColPali approach for educational purposes. Performance characteristics may differ from classic text-based RAG due to visual processing overhead.
+
+### Key Concept
+
+ColPali-style retrieval treats documents as images:
+1. **Visual Ingestion**: PDF pages are rendered as images and split into patches
+2. **Patch Embeddings**: Each patch is embedded using vision-language models
+3. **Late Interaction**: Queries are compared against patches (MaxSim-style scoring)
+4. **Visual Generation**: Top pages are sent directly to VLM for answer generation
+
+This bypasses text extraction entirely, preserving visual layout information.
+
+### Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Visual Ingestion** | PDF → page images → patches | ✅ Implemented |
+| **Patch Embeddings** | Gemini VLM / CLIP embeddings | ✅ Implemented |
+| **Late Interaction** | MaxSim-style patch scoring | ✅ Implemented |
+| **Visual Generation** | VLM answer with visual context | ✅ Implemented |
+| **Source Attribution** | Patch-level highlighting | ✅ Implemented |
+| **Comparison Mode** | Classic vs ColPali side-by-side | ✅ Implemented |
+
+### Setup for Practice 6
+
+```bash
+# Run ColPali ingestion (Practice 6)
+python scripts/ingest.py --colpali --skip-qdrant
+
+# With custom settings
+python scripts/ingest.py --colpali --colpali-dpi 200 --colpali-grid 6x4 --skip-qdrant
+
+# Use CLIP instead of Gemini for embeddings
+python scripts/ingest.py --colpali --colpali-use-clip --skip-qdrant
+```
+
+**Options:**
+- `--colpali-dpi`: Page rendering DPI (default: 150)
+- `--colpali-grid`: Patch grid as ROWSxCOLS (default: 4x3)
+- `--colpali-use-clip`: Use CLIP model for embeddings
+
+### Running the ColPali UI
+
+```bash
+python -m streamlit run apps/app_colpali.py
+```
+
+**UI Modes:**
+- **ColPali Only**: Visual patch-based retrieval
+- **Classic Only**: Traditional text-based RAG
+- **Side-by-Side**: Compare both pipelines
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ColPali Pipeline                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  PDF ──► Page Images ──► Patches ──► Embeddings ──► FAISS   │
+│              │              │             │           │      │
+│              │              │             │           │      │
+│              ▼              ▼             ▼           ▼      │
+│         [150 DPI]      [4x3 grid]    [768-dim]    [Index]   │
+│                                                              │
+├─────────────────────────────────────────────────────────────┤
+│                       Retrieval                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Query ──► Query Embedding ──► Late Interaction Search       │
+│                │                        │                    │
+│                │                        ▼                    │
+│                │               Score all patches             │
+│                │                        │                    │
+│                ▼                        ▼                    │
+│           [768-dim]           Aggregate to page scores       │
+│                                         │                    │
+│                                         ▼                    │
+│                                  Top-K pages                 │
+│                                                              │
+├─────────────────────────────────────────────────────────────┤
+│                      Generation                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Top pages ──► VLM (visual context) ──► Answer               │
+│      │                  │                  │                 │
+│      │                  │                  │                 │
+│      ▼                  ▼                  ▼                 │
+│  [PNG images]    [Gemini 2.0]      [Grounded answer]        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Architecture
+
+```
+rag/colpali/
+├── __init__.py            # Module exports
+├── visual_ingestion.py    # PDF → patches extraction
+├── patch_embeddings.py    # Patch/query embedding generation
+├── late_interaction.py    # MaxSim-style retrieval
+├── visual_generation.py   # VLM answer generation
+├── source_attribution.py  # Patch highlighting and heatmaps
+└── comparison.py          # Classic vs ColPali comparison
+apps/app_colpali.py        # Streamlit UI
+```
+
+### When to Use ColPali
+
+**ColPali may work better for:**
+- Documents with complex visual layouts (forms, diagrams)
+- Questions about visual elements (charts, tables, figures)
+- Documents where text extraction fails or loses context
+
+**Classic RAG is usually better for:**
+- Text-heavy documents
+- Keyword-specific queries
+- Lower latency requirements
+
+### Comparison Results
+
+The side-by-side mode shows:
+- **Retrieval time**: Usually ColPali is slower due to visual processing
+- **Page coverage**: Which pages each pipeline finds
+- **Answer similarity**: How similar the answers are
+- **Preferred pipeline**: Automatic recommendation
+
+### Limitations
+
+This intern-level implementation has the following characteristics:
+- **Speed**: Visual embeddings are slower than text-based retrieval
+- **Scale**: Memory-intensive for large documents
+- **Cost**: Requires VLM calls for embedding generation and answer generation
+- **Accuracy**: Simplified implementation compared to full ColPali research system
+
+### References
+
+- [ColPali: Efficient Document Retrieval with Vision Language Models](https://arxiv.org/abs/2407.01449)
+- [Late Interaction / MaxSim](https://arxiv.org/abs/2004.12832)
+- [Google Gemini Vision](https://ai.google.dev/gemini-api/docs/vision)

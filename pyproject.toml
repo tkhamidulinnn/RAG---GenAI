@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-practice"
+version = "0.1.0"
+description = "RAG retrieval backend with FAISS, BM25, and hybrid search"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "tkhamidulin"},
+]
+keywords = ["rag", "retrieval", "faiss", "bm25", "llm", "gemini"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "google-genai>=0.6.0",
+    "langchain-community>=0.2.0",
+    "langchain-core>=0.2.0",
+    "langchain-text-splitters>=0.2.0",
+    "langchain-qdrant>=0.2.0",
+    "qdrant-client>=1.8.0",
+    "faiss-cpu>=1.7.4",
+    "pymupdf>=1.23.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+full = [
+    "streamlit>=1.31.0",
+    "langfuse>=2.0.0",
+    "sentence-transformers>=2.2.0",
+    "pdfplumber>=0.10.0",
+]
+
+# No CLI scripts - use ingest.py, app.py, run_evaluation.py directly
+
+[project.urls]
+Repository = "https://github.com/tkhamidulin/rag-practice"
+
+[tool.setuptools]
+packages = ["rag", "rag.colpali"]
+
+[tool.setuptools.package-data]
+rag = ["py.typed"]
