@@ -12,8 +12,6 @@ Key differences from Classic RAG (Practices 1-5):
 - Retrieval operates on visual patches
 - Late interaction scoring (MaxSim-style)
 - Visual context passed directly to VLM
-
-This is an intern-level reference implementation for learning and demonstration.
 """
 
 from rag.colpali.visual_ingestion import (

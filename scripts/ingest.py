@@ -114,6 +114,18 @@ Examples:
         action="store_true",
         help="[Practice 5] Extract and index images only (no tables)",
     )
+    parser.add_argument(
+        "--image-min-size",
+        type=int,
+        default=80,
+        metavar="N",
+        help="[Practice 5] Min width/height in pixels for extracted images (default: 80, use 50 to get more)",
+    )
+    parser.add_argument(
+        "--no-page-renders",
+        action="store_true",
+        help="[Practice 5] Disable rendering of pages with figure captions (vector graphics); default is to extract them",
+    )
 
     # Practice 6: ColPali options
     parser.add_argument(
@@ -246,6 +258,7 @@ Examples:
     if extract_images_flag:
         print("\nStep 6b: Extracting images/charts (Practice 5)...")
         try:
+            min_side = args.image_min_size
             extracted_images = extract_images_from_pdf(
                 pdf_path=pdf_path,
                 output_dir=images_dir,
@@ -253,6 +266,9 @@ Examples:
                 client=client,
                 model=settings.gemini_model,
                 use_vlm=True,
+                min_width=min_side,
+                min_height=min_side,
+                extract_page_renders=not args.no_page_renders,
             )
             images_count = len(extracted_images)
             print(f"  Found {images_count} images/charts")

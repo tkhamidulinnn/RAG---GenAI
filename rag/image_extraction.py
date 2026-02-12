@@ -95,25 +95,23 @@ def _is_chart_or_graph(
     width: int,
     height: int,
     caption: Optional[str] = None,
+    min_size: int = 80,
 ) -> bool:
-    """Heuristic to determine if image is likely a chart/graph."""
-    # Skip very small images (likely icons/logos)
-    if width < 100 or height < 100:
+    """Heuristic to determine if image is likely a chart/graph. Use min_size to include more figures."""
+    if width < min_size or height < min_size:
         return False
 
-    # Skip very narrow images (likely decorative)
     aspect_ratio = width / height if height > 0 else 0
-    if aspect_ratio < 0.2 or aspect_ratio > 5:
+    if aspect_ratio < 0.15 or aspect_ratio > 6:
         return False
 
-    # If caption suggests chart/figure, include it
     if caption:
-        chart_keywords = ["chart", "graph", "figure", "trend", "growth", "comparison"]
+        chart_keywords = ["chart", "graph", "figure", "trend", "growth", "comparison", "exhibit", "table"]
         if any(kw in caption.lower() for kw in chart_keywords):
             return True
 
-    # Reasonable size suggests content
-    if width >= 200 and height >= 150:
+    # Include any reasonably sized image (let VLM mark boilerplate later)
+    if width >= min_size and height >= min_size:
         return True
 
     return False
@@ -138,28 +136,32 @@ def generate_image_description_vlm(
     """
     from google.genai import types
 
-    prompt = """Analyze this image from a financial report. Provide a detailed description for retrieval purposes.
+    prompt = """Analyze this image from a financial report. Provide a detailed description for retrieval.
+
+First, decide if this is SUBSTANTIVE content (charts, data, maps, org charts, climate/sustainability figures) or BOILERPLATE (contact info, logo, footer, legal disclaimer, empty decoration).
 
 If this is a chart or graph:
 1. Identify the chart type (bar, line, pie, area, scatter, etc.)
 2. Extract axis labels and units
-3. List key data points, values, and labels visible
-4. Describe the main trend or insight shown
-5. Note any legends or categories
+3. List key data points and labels
+4. Describe the main trend or insight
+5. Mention topics covered: e.g. climate, sustainability, investments, regional distribution, financial metrics, governance
 
-If this is a figure or diagram:
-1. Describe what it shows
-2. List any text labels visible
-3. Note key elements
+If this is boilerplate (contact block, logo, footer):
+1. Set content_type to "boilerplate"
+2. Describe briefly: e.g. "Auditor contact details", "Company logo", "Legal disclaimer"
+3. Do NOT use words like "investments", "climate", "sustainability" unless the image actually shows that
 
 Return a JSON object with:
-- description: A comprehensive text description (2-4 sentences)
-- chart_type: The type of chart (or "figure" if not a chart)
-- image_type: "chart", "graph", "diagram", "figure", "table_image", or "other"
+- description: Text description (2-4 sentences). For boilerplate: one short sentence only.
+- chart_type: Chart type or "figure" or "boilerplate"
+- image_type: "chart", "graph", "diagram", "figure", "table_image", "contact", "logo", or "other"
+- content_type: "substantive" or "boilerplate"
+- topics: List of main topics if substantive (e.g. ["climate", "investments"], ["financial results"], [] for boilerplate)
 - extracted_values: Object mapping labels to values where visible
 - axes: Object with "x" and "y" axis labels/units if applicable
-- trends: Brief description of trends or key insight
-- confidence: "high", "medium", or "low" based on clarity
+- trends: Brief description of trends (only for charts)
+- confidence: "high", "medium", or "low"
 """
 
     if caption:
@@ -171,6 +173,8 @@ Return a JSON object with:
             "description": {"type": "string"},
             "chart_type": {"type": "string"},
             "image_type": {"type": "string"},
+            "content_type": {"type": "string"},
+            "topics": {"type": "array", "items": {"type": "string"}},
             "extracted_values": {"type": "object"},
             "axes": {
                 "type": "object",
@@ -199,14 +203,30 @@ Return a JSON object with:
         )
         return result
     except Exception as e:
-        # Fallback to basic description
         return {
             "description": caption or "Image from financial report",
             "chart_type": "unknown",
             "image_type": "unknown",
+            "content_type": "substantive",
+            "topics": [],
             "extracted_values": {},
             "error": str(e),
         }
+
+
+def _page_has_figure_caption(page_text: str) -> bool:
+    """True if page text contains a figure/chart caption (vector-drawn figures)."""
+    if not page_text:
+        return False
+    patterns = [
+        r"Figure\s+\d+",
+        r"FIGURE\s+\d+",
+        r"Fig\.\s*\d+",
+        r"Chart\s+\d+",
+        r"Graph\s+\d+",
+        r"Exhibit\s+\d+",
+    ]
+    return any(re.search(p, page_text, re.IGNORECASE) for p in patterns)
 
 
 def extract_images_from_pdf(
@@ -216,11 +236,13 @@ def extract_images_from_pdf(
     client=None,
     model: str = "gemini-2.0-flash",
     use_vlm: bool = True,
-    min_width: int = 100,
-    min_height: int = 100,
+    min_width: int = 80,
+    min_height: int = 80,
+    extract_page_renders: bool = True,
+    page_render_dpi: int = 150,
 ) -> List[ExtractedImage]:
     """
-    Extract images from PDF and generate descriptions.
+    Extract images from PDF (embedded raster + vector via page render) and generate descriptions.
 
     Args:
         pdf_path: Path to PDF file
@@ -229,8 +251,10 @@ def extract_images_from_pdf(
         client: Gemini client for VLM analysis
         model: Model to use for VLM
         use_vlm: Whether to use VLM for description generation
-        min_width: Minimum image width to extract
-        min_height: Minimum image height to extract
+        min_width: Minimum image width for embedded images
+        min_height: Minimum image height for embedded images
+        extract_page_renders: If True, render pages with figure captions to capture vector graphics
+        page_render_dpi: DPI for page render (vector → raster)
 
     Returns:
         List of ExtractedImage objects
@@ -241,6 +265,7 @@ def extract_images_from_pdf(
     doc = fitz.open(pdf_path)
     images: List[ExtractedImage] = []
     global_fig_idx = 0
+    pages_with_embedded: set[int] = set()
 
     for page_idx in range(doc.page_count):
         page = doc.load_page(page_idx)
@@ -263,15 +288,11 @@ def extract_images_from_pdf(
             if not image_bytes:
                 continue
 
-            # Skip small images
             if width < min_width or height < min_height:
                 continue
 
-            # Detect caption
             caption = _detect_caption_near_image(page_text, None)
-
-            # Check if likely chart/graph
-            if not _is_chart_or_graph(width, height, caption):
+            if not _is_chart_or_graph(width, height, caption, min_size=min(min_width, min_height)):
                 continue
 
             global_fig_idx += 1
@@ -298,13 +319,18 @@ def extract_images_from_pdf(
                     "image_type": "unknown",
                 }
 
-            # Build description for retrieval
+            # Build description for retrieval (boilerplate clearly marked so semantic search won't match topic queries)
+            content_type = (vlm_result.get("content_type") or "substantive").lower()
             description_parts = [
                 f"[FIGURE] Page {page_idx + 1}, {figure_id}",
             ]
+            if content_type == "boilerplate":
+                description_parts.append("[BOILERPLATE: contact/logo/footer - not substantive content.]")
             if caption:
                 description_parts.append(f"Caption: {caption}")
             description_parts.append(vlm_result.get("description", ""))
+            if vlm_result.get("topics"):
+                description_parts.append("Topics: " + ", ".join(vlm_result["topics"]))
 
             if vlm_result.get("chart_type") and vlm_result["chart_type"] != "unknown":
                 description_parts.append(f"Chart type: {vlm_result['chart_type']}")
@@ -333,6 +359,78 @@ def extract_images_from_pdf(
                 file_path=str(image_path),
             )
 
+            images.append(ExtractedImage(
+                metadata=metadata,
+                description="\n".join(description_parts),
+                extracted_data=vlm_result.get("extracted_values", {}),
+                vlm_analysis=vlm_result,
+            ))
+            pages_with_embedded.add(page_idx + 1)
+
+    # Vector graphics: render pages that have figure/chart captions but no embedded image from that page
+    if extract_page_renders and client and use_vlm:
+        for page_idx in range(doc.page_count):
+            page_num = page_idx + 1
+            if page_num in pages_with_embedded:
+                continue
+            page = doc.load_page(page_idx)
+            page_text = page.get_text("text")
+            if not _page_has_figure_caption(page_text):
+                continue
+
+            mat = fitz.Matrix(page_render_dpi / 72, page_render_dpi / 72)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            image_bytes = pix.tobytes("png")
+            width, height = pix.width, pix.height
+
+            global_fig_idx += 1
+            figure_id = f"figure_{global_fig_idx:03d}"
+            caption = _detect_caption_near_image(page_text, None)
+            filename = f"{figure_id}_page{page_num}.png"
+            image_path = output_dir / filename
+            image_path.write_bytes(image_bytes)
+
+            vlm_result = generate_image_description_vlm(
+                image_bytes=image_bytes,
+                image_ext="png",
+                client=client,
+                model=model,
+                caption=caption,
+            )
+            content_type = (vlm_result.get("content_type") or "substantive").lower()
+            description_parts = [
+                f"[FIGURE] Page {page_num}, {figure_id} (page render, vector content)",
+            ]
+            if content_type == "boilerplate":
+                description_parts.append("[BOILERPLATE: contact/logo/footer - not substantive content.]")
+            if caption:
+                description_parts.append(f"Caption: {caption}")
+            description_parts.append(vlm_result.get("description", ""))
+            if vlm_result.get("topics"):
+                description_parts.append("Topics: " + ", ".join(vlm_result["topics"]))
+            if vlm_result.get("chart_type") and vlm_result["chart_type"] != "unknown":
+                description_parts.append(f"Chart type: {vlm_result['chart_type']}")
+            if vlm_result.get("axes"):
+                axes = vlm_result["axes"]
+                if axes.get("x"):
+                    description_parts.append(f"X-axis: {axes['x']}")
+                if axes.get("y"):
+                    description_parts.append(f"Y-axis: {axes['y']}")
+            if vlm_result.get("trends"):
+                description_parts.append(f"Trend: {vlm_result['trends']}")
+
+            metadata = ImageMetadata(
+                doc_id=doc_id,
+                page=page_num,
+                figure_id=figure_id,
+                caption=caption,
+                image_type=vlm_result.get("image_type", "unknown"),
+                chart_type=vlm_result.get("chart_type"),
+                extraction_method="page_render",
+                width=width,
+                height=height,
+                file_path=str(image_path),
+            )
             images.append(ExtractedImage(
                 metadata=metadata,
                 description="\n".join(description_parts),

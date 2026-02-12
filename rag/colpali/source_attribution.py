@@ -248,6 +248,8 @@ def generate_attribution(
         # Find page image
         page_image = pages_dir / f"{page_score.doc_id}_page_{page_score.page}.png"
         if not page_image.exists():
+            page_image = pages_dir / f"page_{page_score.page:03d}.png"
+        if not page_image.exists():
             page_image = pages_dir / f"page_{page_score.page}.png"
 
         # Build patch attributions

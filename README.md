@@ -479,9 +479,7 @@ apps/app_multimodal.py       # Streamlit UI for multimodal RAG
 
 ## Practice 6: ColPali-style Visual RAG
 
-Practice 6 implements a visual retrieval pipeline inspired by [ColPali](https://arxiv.org/abs/2407.01449), operating directly on document images rather than extracted text. This is an intern-level reference implementation for learning and demonstration.
-
-**Note:** This implementation demonstrates the ColPali approach for educational purposes. Performance characteristics may differ from classic text-based RAG due to visual processing overhead.
+Practice 6 implements a visual retrieval pipeline inspired by [ColPali](https://arxiv.org/abs/2407.01449), operating directly on document images rather than extracted text.
 
 ### Key Concept
 
@@ -608,13 +606,11 @@ The side-by-side mode shows:
 - **Answer similarity**: How similar the answers are
 - **Preferred pipeline**: Automatic recommendation
 
-### Limitations
+### Considerations
 
-This intern-level implementation has the following characteristics:
 - **Speed**: Visual embeddings are slower than text-based retrieval
 - **Scale**: Memory-intensive for large documents
 - **Cost**: Requires VLM calls for embedding generation and answer generation
-- **Accuracy**: Simplified implementation compared to full ColPali research system
 
 ### References
 

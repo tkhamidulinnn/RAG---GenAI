@@ -23,6 +23,47 @@ from rag.table_extraction import ExtractedTable, load_tables
 from rag.image_extraction import ExtractedImage, load_images
 
 
+# Phrases that indicate contact/logo/signatures/boilerplate (not substantive chart content)
+_BOILERPLATE_PHRASES = (
+    "[BOILERPLATE",
+    "contact information",
+    "contact details",
+    "auditor",
+    "deloitte",
+    "touche",
+    "tel:", "fax:", "tel ", "fax ",
+    "www.", ".com",
+    "suite ", "place", "mclean", "address",
+    "independent auditors",
+    "legal disclaimer",
+    "signatures of",
+    "signature",
+    "executive",
+    "president",
+    "managing director",
+    "names and titles",
+    "key executives",
+)
+# Short generic descriptions (VLM didn't describe chart content)
+_BOILERPLATE_GENERIC = ("image from financial report", "image from page")
+# Words that suggest real chart content (do NOT include "figure" — it appears in "[FIGURE] Page N, figure_005")
+_SUBSTANTIVE_HINTS = ("chart", "graph", "trend", "data", "axis", "value", "percent", "growth", "comparison", "distribution", "climate", "investment", "sustainability")
+
+
+def _is_image_boilerplate(description: str) -> bool:
+    """True if the image description looks like contact/logo/generic, not substantive content."""
+    if not description:
+        return False
+    lower = description.lower()
+    if any(phrase.lower() in lower for phrase in _BOILERPLATE_PHRASES):
+        return True
+    # Very short generic description (e.g. "Image from financial report") with no chart-like words
+    if len(description) < 150 and any(g in lower for g in _BOILERPLATE_GENERIC):
+        if not any(h in lower for h in _SUBSTANTIVE_HINTS):
+            return True
+    return False
+
+
 @dataclass
 class MultimodalDocument:
     """Document with modality information."""
@@ -73,17 +114,21 @@ def images_to_documents(images: List[ExtractedImage]) -> List[Document]:
     documents = []
 
     for image in images:
+        fp = image.metadata.file_path or ""
         doc = Document(
             page_content=image.description,
             metadata={
                 "modality": "image",
                 "page": image.metadata.page,
+                "page_number": image.metadata.page,
                 "item_id": image.metadata.figure_id,
                 "figure_id": image.metadata.figure_id,
+                "image_id": image.metadata.figure_id,
                 "caption": image.metadata.caption or "",
                 "image_type": image.metadata.image_type,
                 "chart_type": image.metadata.chart_type or "",
-                "file_path": image.metadata.file_path or "",
+                "file_path": fp,
+                "image_path": fp,
                 "source": "pdf_image",
             }
         )
@@ -179,7 +224,9 @@ class MultimodalRetriever:
     IMAGE_KEYWORDS = [
         "chart", "graph", "figure", "diagram", "plot", "visualization",
         "trend", "line", "bar", "pie", "area", "scatter",
-        "show", "display", "illustrate", "depict",
+        "show", "display", "illustrate", "depict", "image", "picture",
+        "climate", "sustainability", "environment", "investment", "investments",
+        "net income", "income", "revenue", "fy22", "fy23", "fy24", "fy20",
         "over time", "across years", "historical",
     ]
 
@@ -285,7 +332,28 @@ class MultimodalRetriever:
             results["tables"] = self.table_index.similarity_search(query, k=top_k_tables)
 
         if query_images:
-            results["images"] = self.image_index.similarity_search(query, k=top_k_images)
+            fetch_k = min(top_k_images + 10, 20)
+            image_docs = self.image_index.similarity_search(query, k=fetch_k)
+            substantive = [d for d in image_docs if not _is_image_boilerplate(d.page_content or "")]
+            boilerplate = [d for d in image_docs if _is_image_boilerplate(d.page_content or "")]
+            query_lower = query.lower()
+            thematic = any(
+                w in query_lower for w in ("climate", "sustainability", "investment", "investments", "environment", "green")
+            )
+            if thematic:
+                # Prefer images that mention the theme in description; if none, show best substantive (no contact/signatures)
+                theme_words = [w for w in ("climate", "sustainability", "investment", "environment", "green", "paris agreement", "finance") if w in query_lower]
+                theme_matching = substantive
+                if theme_words:
+                    def _matches_theme(doc: Document) -> bool:
+                        content = (doc.page_content or "").lower()
+                        return any(t in content for t in theme_words)
+                    theme_matching = [d for d in substantive if _matches_theme(d)]
+                # Use theme-matching if any, else fall back to all substantive so we still show some images
+                results["images"] = (theme_matching[:top_k_images] if theme_matching else substantive[:top_k_images])
+            else:
+                reordered = substantive + boilerplate
+                results["images"] = reordered[:top_k_images]
 
         return results
 

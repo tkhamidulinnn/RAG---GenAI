@@ -224,6 +224,18 @@ if q:
 
     # Generate answer
     st.subheader("Answer")
+
+    # Show retrieved relevant image (only if we have image docs — do not auto-display all)
+    if image_docs:
+        raw_path = (image_docs[0].metadata.get("image_path") or image_docs[0].metadata.get("file_path") or "").strip()
+        primary_image_path = Path(raw_path) if raw_path else None
+        if primary_image_path and not primary_image_path.exists() and IMAGES_DIR.exists():
+            primary_image_path = IMAGES_DIR / primary_image_path.name
+        if primary_image_path and primary_image_path.exists():
+            st.caption("Retrieved figure")
+            st.image(str(primary_image_path), use_container_width=True)
+            st.caption("")
+
     answer_box = st.empty()
     streamed = ""
 
@@ -238,16 +250,19 @@ if q:
         streamed += token
         answer_box.markdown(streamed)
 
-    # Structured answer
+    # Structured answer (include image_path per Practice 5 requirement)
+    structured = answer_multimodal_structured(
+        client=client,
+        model=settings.gemini_model,
+        query=q,
+        text_docs=text_docs,
+        table_docs=table_docs,
+        image_docs=image_docs,
+    )
+    image_paths = [d.metadata.get("image_path") or d.metadata.get("file_path") for d in image_docs if (d.metadata.get("image_path") or d.metadata.get("file_path"))]
+    if image_paths:
+        structured["image_paths"] = image_paths
     with st.expander("Structured Answer", expanded=False):
-        structured = answer_multimodal_structured(
-            client=client,
-            model=settings.gemini_model,
-            query=q,
-            text_docs=text_docs,
-            table_docs=table_docs,
-            image_docs=image_docs,
-        )
         st.json(structured)
 
     end_trace(trace, {"answer": streamed, "structured": structured})
@@ -277,7 +292,12 @@ if q:
                     page = doc.metadata.get("page", "?")
                     section = doc.metadata.get("section", "")
                     st.markdown(f"**Match {i}** — Page {page}" + (f" — {section}" if section else ""))
-                    st.text(doc.page_content[:500] + "..." if len(doc.page_content) > 500 else doc.page_content)
+                    content = doc.page_content
+                    max_len = 600
+                    if len(content) > max_len:
+                        cut = content[:max_len].rfind(" ")
+                        content = (content[:cut] if cut > 400 else content[:max_len]) + "..."
+                    st.text(content)
                     st.divider()
             tab_idx += 1
 

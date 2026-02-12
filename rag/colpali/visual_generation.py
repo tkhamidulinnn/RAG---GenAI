@@ -56,12 +56,11 @@ def collect_visual_context(
     contexts = []
 
     for page_score in retrieval_result.page_scores[:max_pages]:
-        # Find page image
-        # Convention: page images are stored as doc_id_page_N.png
+        # Find page image (visual_ingestion saves as page_001.png, page_002.png, ...)
         page_image = pages_dir / f"{page_score.doc_id}_page_{page_score.page}.png"
-
         if not page_image.exists():
-            # Try alternative naming
+            page_image = pages_dir / f"page_{page_score.page:03d}.png"
+        if not page_image.exists():
             page_image = pages_dir / f"page_{page_score.page}.png"
 
         if not page_image.exists():
@@ -158,8 +157,8 @@ def generate_visual_answer(
     # Build prompt
     prompt = build_visual_qa_prompt(query, contexts)
 
-    # Build parts with images
-    parts = [types.Part.from_text(prompt)]
+    # Build parts with images (google.genai Part uses keyword args: text=, data=, mime_type=)
+    parts = [types.Part.from_text(text=prompt)]
 
     for ctx in contexts:
         try:
@@ -168,9 +167,9 @@ def generate_visual_answer(
                 data=image_bytes,
                 mime_type="image/png"
             ))
-            parts.append(types.Part.from_text(f"[Above: Page {ctx.page}]"))
+            parts.append(types.Part.from_text(text=f"[Above: Page {ctx.page}]"))
         except Exception as e:
-            parts.append(types.Part.from_text(f"[Page {ctx.page} image unavailable: {e}]"))
+            parts.append(types.Part.from_text(text=f"[Page {ctx.page} image unavailable: {e}]"))
 
     # Generate response
     try:

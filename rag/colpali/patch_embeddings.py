@@ -3,12 +3,8 @@ Multimodal Patch Embeddings for ColPali-style RAG (Practice 6)
 
 Implements Docs/ Practice 6: Multimodal RAG with ColPali-like approach.
 
-Generates embeddings for visual patches using a Vision-Language Model.
+Generates embeddings for visual patches using a Vision-Language Model (Gemini or CLIP).
 These embeddings capture both textual and visual signals from document images.
-
-This intern-level implementation uses Gemini's multimodal embedding capabilities
-or CLIP-style embeddings as a fallback. A full research ColPali system would
-use PaliGemma or similar specialized models.
 
 Key concepts:
 - Patch embeddings: Dense vectors representing visual patch content

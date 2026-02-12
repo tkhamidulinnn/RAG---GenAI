@@ -10,9 +10,6 @@ End-to-end visual document retrieval and QA:
 - Comparison with classic RAG pipeline
 
 Run with: python -m streamlit run app_colpali.py
-
-Note: This is an intern-level reference implementation for learning and demonstration.
-Performance may differ from classic text-based RAG due to visual processing overhead.
 """
 import sys
 from pathlib import Path
@@ -168,8 +165,6 @@ if not q:
     - "What does the organizational chart look like?"
     - "Explain the regional distribution of projects"
 
-    **Note:** This is an intern-level reference implementation. Results may differ from classic RAG due to visual processing characteristics.
-
     Run `python ingest.py --colpali` to enable this pipeline.
     """)
 
@@ -243,6 +238,8 @@ if q:
 
                 for ps in result.page_scores[:top_k_pages]:
                     page_image = PAGES_DIR / f"document_page_{ps.page}.png"
+                    if not page_image.exists():
+                        page_image = PAGES_DIR / f"page_{ps.page:03d}.png"
                     if not page_image.exists():
                         page_image = PAGES_DIR / f"page_{ps.page}.png"
 
@@ -406,7 +403,5 @@ if q:
 # Footer
 st.divider()
 st.caption("""
-**Practice 6 Implementation**: ColPali-style visual retrieval for learning and demonstration.
-Results may differ from classic text-based RAG. The approach is inspired by the
-[ColPali paper](https://arxiv.org/abs/2407.01449) and implements the requirements from Docs/ Practice 6.
+**Practice 6**: ColPali-style visual retrieval. [ColPali paper](https://arxiv.org/abs/2407.01449) · Docs/ Practice 6.
 """)
