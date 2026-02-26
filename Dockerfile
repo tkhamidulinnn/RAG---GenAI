@@ -10,6 +10,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+COPY scripts/entrypoint.sh /app/scripts/entrypoint.sh
+RUN chmod +x /app/scripts/entrypoint.sh
+
 EXPOSE 8501
 
-CMD ["streamlit", "run", "apps/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run entrypoint via sh so it works even when .:/app mount overrides file permissions
+ENTRYPOINT ["/bin/sh", "/app/scripts/entrypoint.sh"]

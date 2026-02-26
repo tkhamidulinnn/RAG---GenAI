@@ -21,6 +21,7 @@ class Settings:
     artifacts_dir: Path
     faiss_dir: Path
     qdrant_path: Path
+    qdrant_url: str | None  # If set (e.g. Docker: http://qdrant:6333), use URL instead of path
     qdrant_collection: str
     langfuse_public_key: str | None
     langfuse_secret_key: str | None
@@ -38,6 +39,7 @@ def load_settings() -> Settings:
     artifacts_dir = Path(os.environ.get("ARTIFACTS_DIR", str(repo_root / "artifacts")))
     faiss_dir = Path(os.environ.get("FAISS_DIR", str(repo_root / "vectorstore_ifc")))
     qdrant_path = Path(os.environ.get("QDRANT_PATH", str(repo_root / "qdrant_local")))
+    qdrant_url = os.environ.get("QDRANT_URL", "").strip() or None
     qdrant_collection = os.environ.get("QDRANT_COLLECTION", "ifc_annual_report").strip()
 
     langfuse_public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
@@ -56,6 +58,7 @@ def load_settings() -> Settings:
         artifacts_dir=artifacts_dir.expanduser().resolve(),
         faiss_dir=faiss_dir.expanduser().resolve(),
         qdrant_path=qdrant_path.expanduser().resolve(),
+        qdrant_url=qdrant_url,
         qdrant_collection=qdrant_collection,
         langfuse_public_key=langfuse_public_key,
         langfuse_secret_key=langfuse_secret_key,

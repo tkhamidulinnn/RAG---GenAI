@@ -1,0 +1,38 @@
+# Virtual env and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Git and IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+.cursor/
+
+# Generated at runtime (don’t bake into image)
+vectorstore_ifc/
+qdrant_local/
+artifacts/
+eval/results/
+table_index/
+image_index/
+*.faiss
+*.pkl
+bm25_index.json
+semantic_cache.json
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Docs (PDFs; optional, mount if needed)
+Docs/
+
+# Misc
+*.md
+!README.md
+.DS_Store

@@ -57,9 +57,15 @@ def load_faiss() -> FAISS:
 
 @st.cache_resource(show_spinner=True)
 def load_qdrant() -> QdrantVectorStore:
+    embeddings = GeminiEmbeddings(client=client, model=settings.embedding_model)
+    if settings.qdrant_url:
+        return QdrantVectorStore.from_existing_collection(
+            embedding=embeddings,
+            url=settings.qdrant_url,
+            collection_name=settings.qdrant_collection,
+        )
     if not settings.qdrant_path.exists():
         raise FileNotFoundError(f"Qdrant store not found: {settings.qdrant_path}")
-    embeddings = GeminiEmbeddings(client=client, model=settings.embedding_model)
     return QdrantVectorStore.from_existing_collection(
         embedding=embeddings,
         path=str(settings.qdrant_path),
@@ -125,8 +131,11 @@ def get_available_sections() -> list:
     ]
 
 
-# Page config
-st.set_page_config(page_title="IFC RAG System", layout="wide")
+# Page config (skip if already set, e.g. when run from app_all multipage)
+try:
+    st.set_page_config(page_title="IFC RAG System", layout="wide")
+except Exception:
+    pass
 st.title("IFC Annual Report 2024 — RAG (Gemini)")
 st.caption("Gemini 2.0 Flash with Vertex AI, FAISS/Qdrant retrieval, Langfuse tracing")
 
@@ -339,7 +348,14 @@ if q:
             st.error(f"{exc}. Run: python ingest.py")
             st.stop()
         except Exception as exc:
-            st.error(f"Retrieval error: {exc}")
+            err_str = str(exc)
+            if "404" in err_str or "doesn't exist" in err_str or "Not found" in err_str:
+                st.error(
+                    "**Qdrant collection not found.** Docker ingest runs with `--skip-qdrant`, so Qdrant is not populated. "
+                    "In the sidebar, set **Vector Store** to **FAISS** and try again."
+                )
+            else:
+                st.error(f"Retrieval error: {exc}")
             st.stop()
 
         # Build trace metadata

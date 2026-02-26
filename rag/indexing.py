@@ -125,7 +125,16 @@ def build_qdrant(
     embeddings: GeminiEmbeddings,
     path: Path,
     collection: str,
+    url: str | None = None,
 ) -> QdrantVectorStore:
+    """Build Qdrant index. Use url= for Docker (Qdrant server); else use path (local storage)."""
+    if url:
+        return QdrantVectorStore.from_documents(
+            documents=documents,
+            embedding=embeddings,
+            url=url,
+            collection_name=collection,
+        )
     path.mkdir(parents=True, exist_ok=True)
     try:
         return QdrantVectorStore.from_documents(

@@ -77,6 +77,9 @@ Examples:
 
     # ColPali visual pipeline (Practice 6)
     python ingest.py --colpali --skip-qdrant
+
+    # All practices in one run (Docker / single workflow)
+    python ingest.py --all --skip-qdrant
         """,
     )
     parser.add_argument("--pdf", type=Path, default=settings.pdf_path, help="Path to input PDF")
@@ -134,6 +137,11 @@ Examples:
         help="[Practice 6] Enable ColPali-style visual patch extraction and indexing",
     )
     parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run all practices: --extract-metadata --build-bm25 --multimodal --colpali (single workflow)",
+    )
+    parser.add_argument(
         "--colpali-dpi",
         type=int,
         default=150,
@@ -151,6 +159,12 @@ Examples:
         help="[Practice 6] Use CLIP for patch embeddings instead of Gemini",
     )
     args = parser.parse_args()
+
+    if getattr(args, "all", False):
+        args.extract_metadata = True
+        args.build_bm25 = True
+        args.multimodal = True
+        args.colpali = True
 
     pdf_path = args.pdf.expanduser().resolve()
     artifacts_dir = args.artifacts.expanduser().resolve()
@@ -222,8 +236,17 @@ Examples:
 
     # Build Qdrant (optional)
     if not args.skip_qdrant:
-        build_qdrant(chunks, embeddings, settings.qdrant_path, settings.qdrant_collection)
-        print(f"  Qdrant collection saved to {settings.qdrant_path}")
+        build_qdrant(
+            chunks,
+            embeddings,
+            settings.qdrant_path,
+            settings.qdrant_collection,
+            url=settings.qdrant_url,
+        )
+        if settings.qdrant_url:
+            print(f"  Qdrant collection pushed to {settings.qdrant_url}")
+        else:
+            print(f"  Qdrant collection saved to {settings.qdrant_path}")
 
     # Step 5: Build BM25 index for sparse retrieval (Practice 3)
     if args.build_bm25:
@@ -257,6 +280,7 @@ Examples:
 
     if extract_images_flag:
         print("\nStep 6b: Extracting images/charts (Practice 5)...")
+        print("  (may take 5–15 min for 147 pages with VLM descriptions)")
         try:
             min_side = args.image_min_size
             extracted_images = extract_images_from_pdf(
@@ -339,6 +363,7 @@ Examples:
         # Step 7b: Generate patch embeddings
         if all_patches:
             print("\nStep 7b: Generating patch embeddings...")
+            print("  (may take 15–30 min; you will see 'Described N/588' progress)")
             try:
                 patch_embeddings = generate_patch_embeddings(
                     patches_list=all_patches,

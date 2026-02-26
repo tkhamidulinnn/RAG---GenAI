@@ -268,6 +268,8 @@ def extract_images_from_pdf(
     pages_with_embedded: set[int] = set()
 
     for page_idx in range(doc.page_count):
+        if page_idx % 20 == 0 or page_idx == doc.page_count - 1:
+            print(f"  Step 6b: scanning page {page_idx + 1}/{doc.page_count}...", flush=True)
         page = doc.load_page(page_idx)
         page_text = page.get_text("text")
 
@@ -369,10 +371,11 @@ def extract_images_from_pdf(
 
     # Vector graphics: render pages that have figure/chart captions but no embedded image from that page
     if extract_page_renders and client and use_vlm:
-        for page_idx in range(doc.page_count):
+        render_pages = [i for i in range(doc.page_count) if (i + 1) not in pages_with_embedded]
+        for ri, page_idx in enumerate(render_pages):
+            if ri % 15 == 0 or ri == len(render_pages) - 1:
+                print(f"  Step 6b: rendering vector pages {ri + 1}/{len(render_pages)}...", flush=True)
             page_num = page_idx + 1
-            if page_num in pages_with_embedded:
-                continue
             page = doc.load_page(page_idx)
             page_text = page.get_text("text")
             if not _page_has_figure_caption(page_text):

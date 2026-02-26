@@ -86,7 +86,10 @@ def load_classic_retriever():
 
 
 # Page config
-st.set_page_config(page_title="IFC RAG - ColPali (Practice 6)", layout="wide")
+try:
+    st.set_page_config(page_title="IFC RAG - ColPali (Practice 6)", layout="wide")
+except Exception:
+    pass
 st.title("IFC Annual Report 2024 — ColPali Visual RAG")
 st.caption("Practice 6: ColPali-style visual patch-based retrieval")
 
@@ -108,7 +111,11 @@ with st.sidebar:
         st.metric("Classic Index", "✓" if available["classic_index"] else "✗")
 
     if not available["embeddings"]:
-        st.error("ColPali embeddings not found. Run: python ingest.py --colpali")
+        st.error(
+            "ColPali embeddings not found. Run full ingest and wait until Step 7 finishes "
+            "(e.g. `python scripts/ingest.py --colpali --skip-qdrant` or `--all`). "
+            "The file `artifacts/colpali/embeddings/patch_embeddings.json` must exist."
+        )
         st.stop()
 
     # Mode selection

@@ -1,619 +1,209 @@
-# RAG Practice: Foundational to Advanced RAG System
+# RAG Practice (Vertex AI)
 
-A comprehensive RAG system that extracts content from PDFs (text, tables, images), stores embeddings in FAISS and Qdrant vector stores, retrieves relevant content via similarity search, and generates answers using Gemini.
+A learning project: a question-answering system over PDFs using a neural network (RAG on Google Cloud). The repo contains a report in PDF; you ask a question — the app finds relevant passages and generates an answer via Vertex AI (Gemini).
 
-**Practices Implemented:**
-- Practice 1: Foundational Text-Based RAG (Naive RAG)
-- Practice 2: RAG Evaluation Pipeline (RAGAS metrics)
-- Practice 3: Advanced Retrieval Techniques
-- Practice 4: System Optimization (Semantic Caching, Multi-hop Retrieval)
-- Practice 5: Multimodal RAG (Tables + Charts/Graphs)
-- Practice 6: ColPali-style Visual RAG
+Practices 1–6 are implemented: text RAG, evaluation, advanced retrieval, semantic cache and multi-hop, multimodal RAG (tables and charts), and visual RAG (ColPali-style).
 
-## Quick Start
+---
 
-1. **Install dependencies:**
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate  # macOS/Linux
-   pip install -r requirements.txt
-   ```
+# Quick start (after you have Docker and gcloud)
 
-2. **Set environment variables:**
-   ```bash
-   export GCP_PROJECT=your-project-id
-   export GCP_LOCATION=us-central1
-   ```
-   Or copy `.env.example` to `.env` and fill in values.
-
-3. **Run ingestion:**
-   ```bash
-   python scripts/ingest.py --skip-qdrant
-   ```
-
-4. **Launch UI:**
-   ```bash
-   streamlit run apps/app.py
-   ```
-
-## Setup (Step by Step)
-
-### Step 1: Install Google Cloud CLI
-
-**macOS:**
-```bash
-brew install google-cloud-sdk
-```
-
-**Windows:** Download from https://cloud.google.com/sdk/docs/install
-
-**Linux:**
-```bash
-curl https://sdk.cloud.google.com | bash
-```
-
-After install, restart terminal.
-
-### Step 2: Create GCP Project
-
-1. Go to https://console.cloud.google.com
-2. Click dropdown at top left (next to "Google Cloud")
-3. Click "New Project"
-4. Enter name (e.g., `my-rag-project`)
-5. Click "Create"
-6. Wait 30 seconds, then select your new project from dropdown
-
-### Step 3: Enable Vertex AI API
-
-1. In GCP Console, go to: https://console.cloud.google.com/apis/library/aiplatform.googleapis.com
-2. Make sure your project is selected at the top
-3. Click "Enable"
-4. Wait until it says "API enabled"
-
-### Step 4: Login to GCP from Terminal
+If Docker and Google Cloud CLI are already installed and you have a GCP project with Vertex AI enabled:
 
 ```bash
+cd rag-practice
+cp .env.example .env
+# Edit .env: set GCP_PROJECT=your-project-id and GCP_LOCATION=us-central1
 gcloud auth application-default login
+docker compose up --build
 ```
 
-This opens a browser. Sign in with your Google account and allow access.
-
-### Step 5: Set Environment Variables
-
-Find your project ID:
-- In GCP Console, click the project dropdown at top
-- Copy the ID (not the name) — looks like `my-rag-project` or `my-rag-project-123456`
-
-Set the variables:
-```bash
-export GCP_PROJECT=your-project-id
-export GCP_LOCATION=us-central1
-```
-
-### Step 6: Create Virtual Environment and Install Dependencies
-
-```bash
-# Create venv (if not exists or broken)
-python3 -m venv .venv
-
-# Activate venv
-source .venv/bin/activate   # macOS/Linux
-# .venv\Scripts\activate    # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Step 7: Verify Setup
-
-```bash
-python -c "from rag.settings import load_settings; print('OK:', load_settings().gcp_project)"
-```
-
-Should print: `OK: your-project-id`
-
-## Ingestion
-
-Extract text from PDF and build vector stores:
-
-```bash
-# Basic ingestion (FAISS only, quick start)
-python scripts/ingest.py --skip-qdrant
-
-# Basic ingestion (FAISS + Qdrant)
-python scripts/ingest.py
-
-# With Practice 3 features (metadata + BM25)
-python scripts/ingest.py --extract-metadata --build-bm25
-
-# Full ingestion with all features
-python scripts/ingest.py --extract-metadata --build-bm25 --skip-qdrant
-
-# Multimodal ingestion (Practice 5)
-python scripts/ingest.py --multimodal --skip-qdrant
-
-# Full multimodal with all features
-python scripts/ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
-```
-
-This creates:
-- `vectorstore_ifc/` — FAISS index (text chunks)
-- `qdrant_local/` — Qdrant local storage
-- `bm25_index.json` — BM25 sparse index (if `--build-bm25`)
-- `table_index/` — FAISS index for tables (if `--multimodal`)
-- `image_index/` — FAISS index for images (if `--multimodal`)
-- `artifacts/tables_extracted/` — Extracted table data
-- `artifacts/images_extracted/` — Extracted images with VLM descriptions
-
-**Chunking**: 1000 characters per chunk, 150 character overlap.
-
-## Run the UI
-
-```bash
-# Text-based RAG (Practices 1-4)
-python -m streamlit run apps/app.py
-
-# Multimodal RAG (Practice 5)
-python -m streamlit run apps/app_multimodal.py
-```
-
-Open http://localhost:8501, select FAISS or Qdrant, enter a question.
-
-**Note:** Stop Streamlit (Ctrl+C) before re-running `ingest.py` — Qdrant local storage cannot be accessed by two processes simultaneously.
-
-## FAISS vs Qdrant
-
-| Aspect | FAISS | Qdrant |
-|--------|-------|--------|
-| Setup | Local files, no server | Local files (or Docker) |
-| Persistence | Disk files (`index.faiss`, `index.pkl`) | Local folder or Docker volume |
-| Concurrency | Multiple processes OK | Single process only (local mode) |
-| Scalability | Single-node, in-memory | Distributed (server mode) |
-| Best for | Prototyping, small datasets | Production, larger datasets |
+Then open http://localhost:8501. On first run, full ingestion (text, multimodal, ColPali, and Qdrant) runs automatically — wait until you see “Ingest done.” in the logs (about 15–40 minutes). In the app you can choose **Vector Store: FAISS** or **Qdrant**. Details and troubleshooting: see “How to run” below.
 
 ---
 
-## Practice 3: Advanced Retrieval
+# How to run (step by step, from scratch)
 
-Practice 3 improves retrieval quality with optional, modular techniques:
-
-### Features
-
-| Feature | Description | Flag |
-|---------|-------------|------|
-| **Re-ranking** | Cross-encoder two-stage retrieval | UI checkbox / `--rerank` |
-| **Metadata Filtering** | Filter by page range or section | UI sidebar |
-| **BM25 Sparse Retrieval** | Lexical keyword matching | `--build-bm25` at ingest |
-| **Hybrid Retrieval** | Dense + Sparse with RRF fusion | UI dropdown |
-
-### Retrieval Modes
-
-- **Dense (baseline)**: Embedding-based semantic search
-- **Sparse**: BM25 lexical/keyword search
-- **Hybrid**: Combined dense + sparse using Reciprocal Rank Fusion (RRF)
-
-### Re-ranking
-
-Two-stage retrieval:
-1. Retrieve Top-N candidates (default: 20) using dense/hybrid
-2. Re-score using cross-encoder model
-3. Return Top-K final results
-
-Uses `cross-encoder/ms-marco-MiniLM-L-6-v2` by default.
-
-### Setup for Practice 3
-
-```bash
-# Re-ingest with metadata and BM25
-python scripts/ingest.py --extract-metadata --build-bm25 --skip-qdrant
-
-# Install cross-encoder (if not already installed)
-pip install sentence-transformers
-```
-
-### Architecture
-
-```
-rag/
-├── retrieval_config.py    # Configuration dataclasses
-├── reranker.py            # Cross-encoder re-ranking
-├── sparse_retrieval.py    # BM25 implementation
-├── hybrid_retrieval.py    # RRF fusion
-├── advanced_retriever.py  # Unified interface
-└── metadata_extractor.py  # Section/content type detection
-```
-
-### References
-
-- [Pinecone: Advanced RAG Techniques](https://www.pinecone.io/learn/advanced-rag-techniques/)
-- [Qdrant: Hybrid Search Tutorial](https://qdrant.tech/documentation/tutorials/hybrid-search/)
-- [Anthropic: Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval)
-- [HuggingFace: Sentence Transformers](https://www.sbert.net/docs/pretrained_cross-encoders.html)
+Below is a single way to run everything via Docker. If you don’t have something yet, follow the steps in order.
 
 ---
 
-## Practice 4: System Optimization
+## Step 0. What you need on your machine
 
-Practice 4 adds performance optimizations to reduce latency and handle complex questions:
+- A **computer** with macOS, Windows, or Linux.
+- **Internet access** (for installation and for Google Cloud).
+- A **Google account** and access to a Google Cloud project with Vertex AI enabled (e.g. a corporate project like `gd-gcp-gridu-genai` or your own project).
 
-### Features
-
-| Feature | Description | UI Control |
-|---------|-------------|------------|
-| **Semantic Caching** | Cache answers for similar questions | Checkbox + threshold slider |
-| **Multi-hop Retrieval** | Decompose complex questions into sub-queries | Checkbox |
-
-### Semantic Caching
-
-Caches query-answer pairs using embeddings-based similarity lookup:
-- Computes embedding for each query
-- Compares against cached query embeddings using cosine similarity
-- Returns cached answer if similarity exceeds threshold (default: 0.92)
-- Persists cache to disk (`semantic_cache.json`)
-
-**Benefits:**
-- Faster response for repeated/similar questions
-- Reduced API costs (no LLM call on cache hit)
-- Observable hit/miss statistics
-
-**Configuration:**
-- `Similarity threshold`: Higher = stricter matching, fewer cache hits
-- `Max entries`: Maximum cached query-answer pairs (default: 500)
-
-### Multi-hop Retrieval
-
-Decomposes complex questions requiring information from multiple document sections:
-
-1. **Complexity Detection**: Analyzes query for multi-part indicators
-2. **Query Decomposition**: Breaks into focused sub-queries
-3. **Sequential Retrieval**: Retrieves documents for each sub-query
-4. **Context Aggregation**: Combines results using round-robin selection
-
-**Triggers decomposition when:**
-- Query contains conjunctions ("and", "also", "both")
-- Query asks for comparisons ("difference between", "compare")
-- Query has multiple question marks
-- Query exceeds minimum word count (10 words)
-
-### Architecture
-
-```
-rag/
-├── semantic_cache.py      # Embeddings-based caching
-└── multihop_retrieval.py  # Query decomposition
-```
-
-### Usage
-
-Enable in the Streamlit sidebar under "Optimization (Practice 4)":
-1. Check "Enable Semantic Cache" for caching
-2. Adjust similarity threshold (0.80-0.99)
-3. Check "Enable Multi-hop Retrieval" for complex questions
-
-### References
-
-- [Anthropic: Caching in RAG](https://www.anthropic.com/news/prompt-caching)
-- [LangChain: Query Decomposition](https://python.langchain.com/docs/tutorials/query_analysis/)
+You’ll need to install two things: Docker and Google Cloud CLI.
 
 ---
 
-## Evaluation (Practice 2)
+## Step 1. Install Docker
 
-Run the evaluation pipeline:
+Docker runs the app in a “container” with all dependencies, without installing Python or libraries on your system.
 
-```bash
-# Quick test (k=5 only)
-python scripts/run_evaluation.py --quick
-
-# Standard evaluation (k=3,5,8)
-python scripts/run_evaluation.py
-
-# Full evaluation with LLM judge
-python scripts/run_evaluation.py --full
-
-# With Practice 3 features
-python scripts/run_evaluation.py --modes dense hybrid --test-reranking
-```
-
-Results are saved to `eval/results/`:
-- `eval_samples_*.json` — Raw evaluation samples
-- `experiments_*.json` — Aggregated metrics
-- `evaluation_report.md` — Markdown report
-
-### Metrics (RAGAS-style)
-
-| Metric | Description |
-|--------|-------------|
-| Faithfulness | Answer grounded in retrieved context (no hallucination) |
-| Answer Relevance | Answer directly addresses the question |
-| Context Precision | Retrieved contexts are relevant (low noise) |
-| Context Recall | Retrieved contexts cover ground truth information |
-
-### Comparing Retrieval Modes
-
-```bash
-# Compare dense baseline vs hybrid vs reranked
-python scripts/run_evaluation.py --modes dense sparse hybrid --test-reranking --quick
-```
-
-This runs experiments across all combinations and generates a comparison report.
+1. Go to: https://docs.docker.com/get-docker/
+2. Choose your OS (Mac, Windows, Linux) and download **Docker Desktop** (or Docker Engine on Linux).
+3. Install and start it.
+4. Wait until the system tray/menu shows that Docker is running (e.g. “Docker Desktop is running”).
+5. Check: open **Terminal** (Mac/Linux) or **PowerShell / Command Prompt** (Windows) and run:
+   ```bash
+   docker --version
+   ```
+   You should see a version line (e.g. `Docker version 24.0.7`). If the command is not found, restart the terminal after installing Docker.
 
 ---
 
-## Practice 5: Multimodal RAG
+## Step 2. Install Google Cloud CLI (gcloud)
 
-Practice 5 adds multimodal retrieval for tables and charts/graphs:
+This tool is used to sign in to Google Cloud and let the app use Vertex AI (Gemini).
 
-### Features
-
-| Feature | Description | Flag/Control |
-|---------|-------------|--------------|
-| **Table Extraction** | Extract tables with structure preservation | `--multimodal` or `--tables-only` |
-| **Image Extraction** | Extract charts/graphs with VLM descriptions | `--multimodal` or `--images-only` |
-| **Multimodal Retrieval** | Search across text, tables, and images | UI mode selector |
-| **Smart Routing** | Auto-detect query intent and route to relevant modalities | "Auto" mode |
-
-### Table Processing (5.1)
-
-Each table is extracted with dual representations:
-- **R1 (Retrieval)**: Markdown-formatted text for semantic search
-- **R2 (Structured)**: JSON with headers, rows, and normalized numeric values
-
-**Extraction pipeline:**
-1. Detect tables using PyMuPDF (fallback: pdfplumber)
-2. Extract table structure (rows, columns, headers)
-3. Detect captions from surrounding text
-4. Normalize numeric values (currency, percentages)
-5. Create both representations and index
-
-**Table QA prompts** force:
-- Step-by-step reasoning
-- Exact cell value extraction
-- Calculation with shown inputs
-- Evidence citations (page, table_id, row/column)
-
-### Image/Chart Processing (5.2)
-
-Charts and graphs are processed using VLM (Vision Language Model):
-1. Extract embedded images from PDF
-2. Filter by size (skip icons/logos)
-3. Send to Gemini VLM for description
-4. Extract: chart type, axes, values, trends
-5. Index textual description for retrieval
-
-**VLM extracts:**
-- Chart type (bar, line, pie, area, scatter)
-- Axis labels and units
-- Key data points and values
-- Trends and insights
-- Confidence level
-
-### Setup for Practice 5
-
-```bash
-# Install dependencies (pdfplumber optional but recommended)
-pip install pdfplumber
-
-# Run multimodal ingestion
-python scripts/ingest.py --multimodal --skip-qdrant
-
-# Or extract tables only
-python scripts/ingest.py --tables-only --skip-qdrant
-
-# Or extract images only
-python scripts/ingest.py --images-only --skip-qdrant
-
-# Full ingestion with all features
-python scripts/ingest.py --extract-metadata --build-bm25 --multimodal --skip-qdrant
-```
-
-### Running Multimodal UI
-
-```bash
-python -m streamlit run apps/app_multimodal.py
-```
-
-**UI Controls:**
-- **Mode selector**: Auto, Text only, Tables only, Images only, Mixed
-- **Top-K sliders**: Separate K for text, tables, images
-- **Display toggles**: Show/hide text chunks, tables, images
-- **Raw data view**: Inspect structured table JSON
-
-### Retrieval Modes
-
-| Mode | Description |
-|------|-------------|
-| **Auto** | Detects query intent using keywords and routes accordingly |
-| **Text only** | Baseline text chunk retrieval |
-| **Tables only** | Search only table representations |
-| **Images only** | Search only image descriptions |
-| **Mixed** | Search all modalities and merge results |
-
-**Intent detection keywords:**
-- Tables: "table", "row", "column", "value", "percent", "FY", "$", "revenue", etc.
-- Images: "chart", "graph", "figure", "trend", "visualization", etc.
-
-### Demo Queries
-
-**Table queries:**
-- "What was the total revenue in FY24?"
-- "Compare IFC's assets between 2023 and 2024"
-- "What percentage of disbursements went to climate finance?"
-
-**Chart queries:**
-- "What trends are shown in the investment growth chart?"
-- "Describe the regional distribution of projects"
-- "What does the portfolio composition figure show?"
-
-**Combined queries:**
-- "Explain the financial performance and how it's visualized"
-- "What are the key metrics and their trends over time?"
-
-### Architecture
-
-```
-rag/
-├── table_extraction.py      # Table extraction with dual representation
-├── image_extraction.py      # Image extraction with VLM descriptions
-├── multimodal_indexing.py   # Unified indexing and retrieval
-├── multimodal_prompts.py    # Table QA, Visual QA, Combined prompts
-apps/app_multimodal.py       # Streamlit UI for multimodal RAG
-```
-
-### Risks and Mitigations
-
-| Risk | Mitigation |
-|------|------------|
-| Table extraction errors | Dual extraction (PyMuPDF + pdfplumber fallback) |
-| Poor image descriptions | Confidence scoring, caption detection |
-| Hallucination | Strict grounding prompts, evidence citations required |
-| Missing evidence | Explicit refusal when data not found |
-| Slow VLM processing | Cached descriptions, batch processing |
-
-### References
-
-- [Google Cloud: Multimodal RAG](https://cloud.google.com/blog/products/ai-machine-learning/multimodal-rag-with-gemini)
-- [LangChain: Multi-Vector Retriever](https://python.langchain.com/docs/modules/data_connection/retrievers/multi_vector)
+1. Go to: https://cloud.google.com/sdk/docs/install
+2. Select your OS and follow the install instructions (e.g. script or Homebrew on Mac).
+3. After installing, open the terminal again and run:
+   ```bash
+   gcloud --version
+   ```
+   The gcloud version should be printed.
 
 ---
 
-## Practice 6: ColPali-style Visual RAG
+## Step 3. Get a Google Cloud project
 
-Practice 6 implements a visual retrieval pipeline inspired by [ColPali](https://arxiv.org/abs/2407.01449), operating directly on document images rather than extracted text.
+- If you already have a **corporate or course project** (e.g. `gd-gcp-gridu-genai`) — get its **Project ID** and go to Step 4.
+- To create your own project:
+  1. Go to https://console.cloud.google.com
+  2. Open the project dropdown (top left) → “New project” → enter a name and note the **Project ID** (e.g. `my-rag-project`).
+  3. **Vertex AI API** must be enabled in the project. Usually: “APIs & Services” → “Enable APIs” → search for “Vertex AI API” and enable it. If the project was given by an instructor or company, the API may already be enabled.
 
-### Key Concept
+---
 
-ColPali-style retrieval treats documents as images:
-1. **Visual Ingestion**: PDF pages are rendered as images and split into patches
-2. **Patch Embeddings**: Each patch is embedded using vision-language models
-3. **Late Interaction**: Queries are compared against patches (MaxSim-style scoring)
-4. **Visual Generation**: Top pages are sent directly to VLM for answer generation
+## Step 4. Prepare the project folder
 
-This bypasses text extraction entirely, preserving visual layout information.
+1. Download or clone the repo (e.g. unzip an archive from Google Drive).
+2. Open the terminal and go to the project folder:
+   ```bash
+   cd path/to/rag-practice
+   ```
+   For example: `cd ~/Downloads/rag-practice` or `cd /Users/jane/Desktop/rag-practice`. Replace `path/to/rag-practice` with your path.
 
-### Features
+3. Check that the folder contains `docker-compose.yml`, `Dockerfile`, and directories `apps`, `rag`, `data`. The `data` folder should contain a PDF (e.g. `ifc-annual-report-2024-financials.pdf`).
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Visual Ingestion** | PDF → page images → patches | ✅ Implemented |
-| **Patch Embeddings** | Gemini VLM / CLIP embeddings | ✅ Implemented |
-| **Late Interaction** | MaxSim-style patch scoring | ✅ Implemented |
-| **Visual Generation** | VLM answer with visual context | ✅ Implemented |
-| **Source Attribution** | Patch-level highlighting | ✅ Implemented |
-| **Comparison Mode** | Classic vs ColPali side-by-side | ✅ Implemented |
+---
 
-### Setup for Practice 6
+## Step 5. Create the settings file (.env)
 
-```bash
-# Run ColPali ingestion (Practice 6)
-python scripts/ingest.py --colpali --skip-qdrant
+The `.env` file holds your Google Cloud project ID. It is **not** in the archive (it’s not in the repo), so you must create it once.
 
-# With custom settings
-python scripts/ingest.py --colpali --colpali-dpi 200 --colpali-grid 6x4 --skip-qdrant
+1. In the `rag-practice` folder, find **`.env.example`**.
+2. Copy it and name the copy **`.env`**:
+   - In the terminal (from `rag-practice`):
+     ```bash
+     cp .env.example .env
+     ```
+   - Or manually: copy `.env.example` and rename the copy to `.env`.
+3. Open `.env` in any editor and set:
+   - **GCP_PROJECT** — your Project ID (e.g. `gd-gcp-gridu-genai` or your project).
+   - **GCP_LOCATION** — region, usually `us-central1`.
+   Example:
+   ```
+   GCP_PROJECT=gd-gcp-gridu-genai
+   GCP_LOCATION=us-central1
+   ```
+4. Save the file.
 
-# Use CLIP instead of Gemini for embeddings
-python scripts/ingest.py --colpali --colpali-use-clip --skip-qdrant
-```
+---
 
-**Options:**
-- `--colpali-dpi`: Page rendering DPI (default: 150)
-- `--colpali-grid`: Patch grid as ROWSxCOLS (default: 4x3)
-- `--colpali-use-clip`: Use CLIP model for embeddings
+## Step 6. Sign in to Google Cloud from the terminal
 
-### Running the ColPali UI
+You need to log in once so the app in Docker can use your account for Vertex AI.
 
-```bash
-python -m streamlit run apps/app_colpali.py
-```
+1. In the terminal run:
+   ```bash
+   gcloud auth application-default login
+   ```
+2. A browser window will open. Sign in with your Google account and allow access.
+3. After success you’ll see something like “Credentials saved” in the terminal. You don’t need to repeat this until the token expires or you switch accounts.
 
-**UI Modes:**
-- **ColPali Only**: Visual patch-based retrieval
-- **Classic Only**: Traditional text-based RAG
-- **Side-by-Side**: Compare both pipelines
+---
 
-### How It Works
+## Step 7. Run the app with Docker
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ColPali Pipeline                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  PDF ──► Page Images ──► Patches ──► Embeddings ──► FAISS   │
-│              │              │             │           │      │
-│              │              │             │           │      │
-│              ▼              ▼             ▼           ▼      │
-│         [150 DPI]      [4x3 grid]    [768-dim]    [Index]   │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│                       Retrieval                              │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Query ──► Query Embedding ──► Late Interaction Search       │
-│                │                        │                    │
-│                │                        ▼                    │
-│                │               Score all patches             │
-│                │                        │                    │
-│                ▼                        ▼                    │
-│           [768-dim]           Aggregate to page scores       │
-│                                         │                    │
-│                                         ▼                    │
-│                                  Top-K pages                 │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│                      Generation                              │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Top pages ──► VLM (visual context) ──► Answer               │
-│      │                  │                  │                 │
-│      │                  │                  │                 │
-│      ▼                  ▼                  ▼                 │
-│  [PNG images]    [Gemini 2.0]      [Grounded answer]        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
+1. Make sure Docker is running (Docker Desktop is up).
+2. In the terminal you should be in the `rag-practice` folder. If not, run `cd path/to/rag-practice` again.
+3. Run this single command:
+   ```bash
+   docker compose up --build
+   ```
+---
 
-### Architecture
+## Step 8. Open the app in the browser
 
-```
-rag/colpali/
-├── __init__.py            # Module exports
-├── visual_ingestion.py    # PDF → patches extraction
-├── patch_embeddings.py    # Patch/query embedding generation
-├── late_interaction.py    # MaxSim-style retrieval
-├── visual_generation.py   # VLM answer generation
-├── source_attribution.py  # Patch highlighting and heatmaps
-└── comparison.py          # Classic vs ColPali comparison
-apps/app_colpali.py        # Streamlit UI
-```
+1. Open a browser (Chrome, Firefox, Safari, etc.).
+2. In the address bar type:
+   ```
+   http://localhost:8501
+   ```
+   and press Enter.
+3. The RAG Practice app page should open.
 
-### When to Use ColPali
+---
 
-**ColPali may work better for:**
-- Documents with complex visual layouts (forms, diagrams)
-- Questions about visual elements (charts, tables, figures)
-- Documents where text extraction fails or loses context
+## Step 9. Using the interface
 
-**Classic RAG is usually better for:**
-- Text-heavy documents
-- Keyword-specific queries
-- Lower latency requirements
+1. **Home page (app_all)** — short description and index status. In the **sidebar on the left** you’ll see:
+   - **1_Text_RAG** — Practices 1–4: text Q&A, semantic search, hybrid retrieval, cache, multi-hop.
+   - **2_Multimodal** — Practice 5: questions over tables and charts from the PDF.
+   - **3_ColPali** — Practice 6: visual search over page “patches”.
 
-### Comparison Results
+2. Click the practice you want (e.g. **1_Text_RAG**).
+3. On **1_Text_RAG** you can select **Vector Store: FAISS** or **Qdrant** in the sidebar (both are populated on first run).
+4. Enter a question about the PDF (e.g. “What was IFC's Net Income for the fiscal year ending June 30, 2024?”) and press Enter or the submit button.
+5. The app will find relevant passages and generate an answer. Below you can see the retrieved text chunks (sources).
+6. To switch to another practice, choose it again from the sidebar.
 
-The side-by-side mode shows:
-- **Retrieval time**: Usually ColPali is slower due to visual processing
-- **Page coverage**: Which pages each pipeline finds
-- **Answer similarity**: How similar the answers are
-- **Preferred pipeline**: Automatic recommendation
+---
 
-### Considerations
+## Running again (second and later times)
 
-- **Speed**: Visual embeddings are slower than text-based retrieval
-- **Scale**: Memory-intensive for large documents
-- **Cost**: Requires VLM calls for embedding generation and answer generation
+1. Start Docker Desktop if you stopped it.
+2. In the terminal go to `rag-practice`: `cd path/to/rag-practice`.
+3. Run:
+   ```bash
+   docker compose up --build
+   ```
+   Indexes (FAISS, Qdrant, ColPali) are already built. Full ingestion runs only if the **text index** or **ColPali embeddings** are missing; if both exist, the app starts quickly. Open http://localhost:8501 in the browser again.
 
-### References
+---
 
-- [ColPali: Efficient Document Retrieval with Vision Language Models](https://arxiv.org/abs/2407.01449)
-- [Late Interaction / MaxSim](https://arxiv.org/abs/2004.12832)
-- [Google Gemini Vision](https://ai.google.dev/gemini-api/docs/vision)
+# For reviewers (short)
+
+If you downloaded an archive (e.g. from Google Drive) or cloned the repo:
+
+1. Unzip the archive and go to the `rag-practice` folder.
+2. Install Docker and Google Cloud CLI (gcloud).
+3. Create `.env`: `cp .env.example .env` and set your `GCP_PROJECT` and `GCP_LOCATION` (project with Vertex AI enabled).
+4. Run: `gcloud auth application-default login`.
+5. Run: `docker compose up --build`.
+6. Open http://localhost:8501 in the browser and pick a practice from the sidebar.
+
+On first run the container will run full ingestion (a few minutes). The PDF is already in the `data/` folder in the repo.
+
+---
+
+# Additional
+
+- **Run without Docker (local):** You need Python 3.11+, install dependencies from `requirements.txt`, create `.env`, and run `gcloud auth application-default login`. Then run once: `python scripts/ingest.py --all` (or `--all --skip-qdrant` if you don't use Qdrant). Then: `streamlit run apps/app_all.py`. Open http://localhost:8501.
+- **Docker environment variables:**
+  - `RUN_FULL_INGEST=1` — force full ingestion on every container start (FAISS, Qdrant, ColPali, etc.).
+  - `RUN_FULL_INGEST=0` — never run ingestion on start (only start the app; all indexes, including ColPali and Qdrant, must already exist).
+  - If neither is set, ingestion runs when the text index or ColPali embeddings are missing (first run or after deleting `artifacts/colpali`).
+
+---
+
+# Links
+
+- [Vertex AI](https://cloud.google.com/vertex-ai)
+- [Gemini API](https://ai.google.dev/gemini-api/docs)
+- [Docker — install](https://docs.docker.com/get-docker/)
+- [Google Cloud CLI — install](https://cloud.google.com/sdk/docs/install)

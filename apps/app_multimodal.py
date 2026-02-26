@@ -90,7 +90,10 @@ def get_image_data():
 
 
 # Page config
-st.set_page_config(page_title="IFC RAG - Multimodal", layout="wide")
+try:
+    st.set_page_config(page_title="IFC RAG - Multimodal", layout="wide")
+except Exception:
+    pass
 st.title("IFC Annual Report 2024 — Multimodal RAG")
 st.caption("Practice 5: Text + Tables + Charts/Graphs retrieval")
 

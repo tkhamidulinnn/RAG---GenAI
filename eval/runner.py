@@ -74,6 +74,12 @@ def load_vector_store(store_type: str, settings, client) -> FAISS | QdrantVector
             allow_dangerous_deserialization=True,
         )
     elif store_type == "qdrant":
+        if settings.qdrant_url:
+            return QdrantVectorStore.from_existing_collection(
+                embedding=embeddings,
+                url=settings.qdrant_url,
+                collection_name=settings.qdrant_collection,
+            )
         if not settings.qdrant_path.exists():
             raise FileNotFoundError(f"Qdrant store not found: {settings.qdrant_path}")
         return QdrantVectorStore.from_existing_collection(
